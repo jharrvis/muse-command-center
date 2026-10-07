@@ -32,9 +32,26 @@ lalu `docs/topologi-mcc.png` (gambaran arsitektur).
 
 ## 3. Checklist deployment (kerjakan berurutan)
 
+### Syarat mesin target (penting!)
+
+MCC butuh mesin yang:
+
+1. **Stabil / selalu hidup** — bukan VM ephemeral yang diganti berkala.
+2. **Bisa menerima koneksi masuk** dari jaringan Anda (mis. Tailscale dengan
+   inbound diizinkan, atau LAN). Dashboard dibuka dari browser di perangkat
+   Anda, jadi browser harus bisa mencapai port server.
+3. Python 3 terinstal (server hanya pakai stdlib, tanpa `pip install`).
+
+> ⚠️ **VM terkelola Muse TIDAK cocok** sebagai server MCC: ia join tailnet
+> sebagai *client-only* (membuat koneksi keluar saja, tidak bisa menerima
+> koneksi masuk — browser Anda tidak akan bisa membukanya) dan bersifat
+> ephemeral (diganti berkala sehingga server mati). Tetap pakai VPS/server
+> sendiri seperti pada setup referensi.
+
+### Langkah
+
 - [ ] **Prasyarat**: VPS Ubuntu (bebas, mis. 1 vCPU/1 GB cukup) yang sudah
-      join jaringan Tailscale pengguna; Python 3 terinstal. Tidak perlu
-      `pip install` apa pun (server hanya pakai stdlib).
+      join jaringan Tailscale pengguna **dengan inbound diizinkan**;
 - [ ] **Salin repo** ke VPS, mis. `/opt/muse-command-center/`.
 - [ ] **Konfigurasi**: `cp .env.example .env && chmod 600 .env`, isi:
       - `MCC_BIND` = IP Tailscale VPS (JANGAN `0.0.0.0` — server tidak boleh
