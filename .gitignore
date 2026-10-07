@@ -1,0 +1,30 @@
+# === JANGAN PERNAH COMMIT FILE INI KE GIT ===
+# Kredensial & data operasional Muse Command Center.
+
+# Kredensial server
+.env
+.users
+
+# Database operasional (berisi titipan, tugas, dsb.)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/
+
+# File auth helper mcc (berisi user:password)
+# (ini di luar repo, di ~/.config/mcc/auth — pastikan tidak ikut)
+
+# Model 3D besar (letakkan manual di assets/models/)
+assets/models/*.glb
+assets/models/*.gltf
+
+# State lokal cron/helper
+seen_inbox.json
+.inbox_watch_fail
+
+# Backup & cache
+*.bak*
+*.bak-*
+__pycache__/
+*.pyc

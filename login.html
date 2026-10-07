@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Masuk — Command Center</title>
+<script>
+  (function(){ try {
+    var t = localStorage.getItem('mcc-theme');
+    if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    document.documentElement.dataset.theme = t;
+  } catch(e){ document.documentElement.dataset.theme = 'dark'; } })();
+</script>
+<style>
+  :root { --bg:#0e1116; --panel:#161b22; --border:#2a3139; --text:#d7dde5;
+          --dim:#8b949e; --accent:#3fb950; --bad:#f85149; --btn-text:#04120a; }
+  :root[data-theme="light"] { --bg:#f6f8fa; --panel:#ffffff; --border:#d1d9e0;
+          --text:#1f2328; --dim:#59636e; --accent:#1f883d; --bad:#d1242f;
+          --btn-text:#ffffff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+         min-height:100vh; display:flex; align-items:center; justify-content:center; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:12px;
+          padding:32px; width:340px; max-width:92vw; }
+  h1 { margin:0 0 4px; font-size:20px; }
+  p.sub { margin:0 0 20px; color:var(--dim); font-size:13px; }
+  label { display:block; font-size:12px; color:var(--dim); margin:12px 0 4px; }
+  input { width:100%; background:var(--bg); border:1px solid var(--border);
+          color:var(--text); border-radius:6px; padding:10px 12px; font-size:15px; }
+  input:focus { outline:none; border-color:var(--accent); }
+  button { width:100%; margin-top:20px; background:var(--accent); color:var(--btn-text);
+           border:none; border-radius:6px; padding:11px; font-size:15px;
+           font-weight:600; cursor:pointer; }
+  button:hover { filter:brightness(1.1); }
+  .err { display:none; background:rgba(248,81,73,.1); border:1px solid var(--bad);
+         color:var(--bad); padding:9px 12px; border-radius:6px; font-size:13px;
+         margin-bottom:4px; }
+</style>
+</head>
+<body>
+  <form class="card" method="post" action="/login">
+    <h1>Command Center</h1>
+    <p class="sub">Masuk untuk memantau akun-akun Muse.</p>
+    <div class="err" id="err">Username atau password salah.</div>
+    <label for="user">Username</label>
+    <input id="user" name="user" autocomplete="username" required autofocus>
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <button type="submit">Masuk</button>
+  </form>
+<script>
+  if (new URLSearchParams(location.search).get('error') === '1') {
+    document.getElementById('err').style.display = 'block';
+  }
+</script>
+</body>
+</html>

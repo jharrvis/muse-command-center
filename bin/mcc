@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# mcc — klien Muse Command Center (task bus + kotak titip tugas + heartbeat)
+#
+# Penggunaan:
+#   mcc task-start AKUN "judul" ["detail"]      -> catat tugas mulai (cetak id)
+#   mcc task-done ID ["detail"]                -> tandai tugas selesai
+#   mcc task-fail ID ["detail"]                -> tandai tugas gagal
+#   mcc tasks [AKUN] [STATUS]                  -> daftar tugas (STATUS: running|done|failed|all)
+#   mcc inbox-send DARI UNTUK "judul" ["isi"]  -> titip tugas ke akun lain
+#   mcc inbox AKUN                             -> lihat titipan terbuka untuk AKUN
+#   mcc inbox-ack ID AKUN                      -> tandai titipan diambil
+#   mcc inbox-done ID AKUN                     -> tandai titipan selesai
+#   mcc beat AKUN ["catatan"]                  -> kirim heartbeat
+#
+# Konfigurasi via env: MCC_URL (wajib, contoh http://100.x.x.x:9120),
+# MCC_AUTH_FILE (default ~/.config/mcc/auth, format "user:password"),
+# MCC_DIRECT=1 untuk koneksi langsung tanpa proxy tailnet.
+set -uo pipefail
+
+if [[ -z "${MCC_URL:-}" ]]; then
+  echo "mcc: MCC_URL belum diset. Contoh:" >&2
+  echo "  export MCC_URL=http://<ip-tailscale-server>:9120" >&2
+  echo "  export MCC_AUTH_FILE=~/.config/mcc/auth   # berisi user:password" >&2
+  exit 1
+fi
+AUTH_FILE="${MCC_AUTH_FILE:-$HOME/.config/mcc/auth}"
+
+die() { echo "mcc: $*" >&2; exit 1; }
+[[ -f "$AUTH_FILE" ]] || die "file auth tidak ada: $AUTH_FILE (format: user:password)"
+
+# Target tailnet (100.64/10) dicapai lewat CONNECT proxy :3130 bila tersedia,
+# kecuali MCC_DIRECT=1 (mesin sudah punya tailnet langsung).
+CURL_NET=()
+if [[ -z "${MCC_DIRECT:-}" ]]; then
+  host="$(printf '%s' "$MCC_URL" | sed -E 's#https?://([^/:]+).*#\1#')"
+  if [[ "$host" =~ ^100\.([6-9]|[1-9][0-9]|1[0-9][0-9]|2[0-9][0-9])\. ]]; then
+    up="${HTTPS_PROXY:-${https_proxy:-}}"
+    if [[ -n "$up" ]]; then
+      tp="$(printf '%s' "$up" | sed 's/:3128$/:3130/')"
+      CURL_NET=(-x "$tp")
+    fi
+  fi
+fi
+[[ ${#CURL_NET[@]} -eq 0 ]] && CURL_NET=(--noproxy '*')
+
+mkjson() {
+  python3 - "$@" <<'PYEOF'
+import json, sys
+d = {}
+a = sys.argv[1:]
+for i in range(0, len(a) - 1, 2):
+    d[a[i]] = a[i + 1]
+print(json.dumps(d, ensure_ascii=False))
+PYEOF
+}
+
+api() { # api METHOD PATH [JSON]
+  local method="$1" path="$2" json="${3:-}"
+  local args=(-sS "${CURL_NET[@]}" -u "$(cat "$AUTH_FILE")"
+              -H 'Content-Type: application/json' -X "$method")
+  [[ -n "$json" ]] && args+=(-d "$json")
+  curl "${args[@]}" "$MCC_URL$path"
+}
+
+pretty() { python3 -m json.tool; }
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \?//'
+  exit "${1:-0}"
+}
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  task-start)
+    [[ $# -ge 2 ]] || die "pakai: mcc task-start AKUN \"judul\" [\"detail\"]"
+    api POST /api/tasks "$(mkjson account "$1" title "$2" detail "${3:-}")" \
+      | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])"
+    ;;
+  task-done|task-fail)
+    [[ $# -ge 1 ]] || die "pakai: mcc $cmd ID [\"detail\"]"
+    st="done"; [[ "$cmd" == task-fail ]] && st="failed"
+    api PATCH "/api/tasks/$1" "$(mkjson status "$st" detail "${2:-}")" | pretty
+    ;;
+  tasks)
+    q="status=${2:-all}"; [[ -n "${1:-}" ]] && q="$q&account=$1"
+    api GET "/api/tasks?$q&limit=50" | pretty
+    ;;
+  inbox-send)
+    [[ $# -ge 3 ]] || die "pakai: mcc inbox-send DARI UNTUK \"judul\" [\"isi\"]"
+    api POST /api/inbox "$(mkjson from_account "$1" to_account "$2" title "$3" body "${4:-}")" \
+      | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])"
+    ;;
+  inbox)
+    [[ $# -ge 1 ]] || die "pakai: mcc inbox AKUN"
+    api GET "/api/inbox?for=$1&status=open" | pretty
+    ;;
+  inbox-ack|inbox-done)
+    [[ $# -ge 2 ]] || die "pakai: mcc $cmd ID AKUN"
+    act="ack"; [[ "$cmd" == inbox-done ]] && act="done"
+    api POST "/api/inbox/$1/$act" "$(mkjson by "$2")" | pretty
+    ;;
+  beat)
+    [[ $# -ge 1 ]] || die "pakai: mcc beat AKUN [\"catatan\"]"
+    api POST /api/heartbeat "$(mkjson account "$1" note "${2:-}")" | pretty
+    ;;
+  -h|--help|help|"") usage 0 ;;
+  *) die "perintah tidak dikenal: $cmd (lihat: mcc help)" ;;
+esac

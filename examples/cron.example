@@ -1,0 +1,15 @@
+# Contoh cron untuk Muse Command Center
+#
+# 1. Salin pola di bawah ke `crontab -e` milik user yang menjalankan MCC.
+# 2. Sesuaikan path repo dan nama akun.
+# 3. Jangan taruh password / IP di sini — itu milik env & file auth.
+
+# --- Server: jalan otomatis saat boot (sebagai user pemilik MCC) ---
+# @reboot sleep 30 && /usr/bin/python3 /opt/muse-command-center/server.py >> /opt/muse-command-center/server.log 2>&1
+
+# --- Heartbeat tiap 15 menit: denyut rutin akun agen ---
+# (Diam bila sukses; hanya melapor bila gagal 2x beruntun.)
+# */15 * * * * MCC_URL=http://<ip-tailscale>:9120 /opt/muse-command-center/bin/mcc beat <nama-akun> >/dev/null 2>&1
+
+# --- Inbox watch tiap 5 menit: laporkan titipan BARU saja ---
+# */5 * * * * MCC_URL=http://<ip-tailscale>:9120 MCC_ACCOUNT=<nama-akun> /opt/muse-command-center/bin/mcc-watch

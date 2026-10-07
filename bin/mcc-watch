@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# mcc-watch — cek inbox akun di Muse Command Center, hanya laporkan yang BARU.
+# Output: JSON array berisi item titipan baru (kosong [] bila tidak ada).
+# Khusus: {"error":"mcc unreachable"} bila server tak bisa dihubungi
+# (dibatasi 1x per 2 jam agar tidak spam).
+#
+# Konfigurasi via env:
+#   MCC_ACCOUNT   nama akun yang inbox-nya dipantau (default: $MCC_USER)
+#   MCC_BIN       path ke helper mcc (default: ./bin/mcc relatif dari repo,
+#                 atau ~/workspace/bin/mcc)
+#   MCC_STATE_DIR direktori state (default: ~/.local/state/mcc)
+# State: seen_inbox.json di MCC_STATE_DIR
+set -uo pipefail
+
+MCC_ACCOUNT="${MCC_ACCOUNT:-${MCC_USER:-}}"
+[[ -n "$MCC_ACCOUNT" ]] || { echo "mcc-watch: set MCC_ACCOUNT dulu" >&2; exit 1; }
+MCC_BIN_DEFAULT="$(cd "$(dirname "$0")" && pwd)/mcc"
+MCC_BIN="${MCC_BIN:-$MCC_BIN_DEFAULT}"
+STATE_DIR="${MCC_STATE_DIR:-$HOME/.local/state/mcc}"
+SEEN="$STATE_DIR/seen_inbox.json"
+FAILFLAG="$STATE_DIR/.inbox_watch_fail"
+mkdir -p "$STATE_DIR"
+TMP="$(mktemp)"
+trap 'rm -f "$TMP"' EXIT
+
+if ! "$MCC_BIN" inbox "$MCC_ACCOUNT" >"$TMP" 2>/dev/null; then
+  now=$(date +%s)
+  if [[ -f "$FAILFLAG" ]] && (( now - $(cat "$FAILFLAG") < 7200 )); then
+    exit 0
+  fi
+  echo "$now" > "$FAILFLAG"
+  echo '{"error":"mcc unreachable"}'
+  exit 0
+fi
+rm -f "$FAILFLAG"
+
+python3 - "$TMP" "$SEEN" <<'PYEOF'
+import json, sys, os
+tmp, seen_path = sys.argv[1], sys.argv[2]
+with open(tmp, encoding="utf-8") as f:
+    data = json.load(f)
+items = data.get("inbox", []) or []
+seen = set()
+if os.path.exists(seen_path):
+    try:
+        seen = set(json.load(open(seen_path, encoding="utf-8")).get("seen_ids", []))
+    except Exception:
+        seen = set()
+new = [it for it in items if it.get("id") not in seen]
+seen.update(it.get("id") for it in items if it.get("id") is not None)
+with open(seen_path, "w", encoding="utf-8") as f:
+    json.dump({"seen_ids": sorted(seen)}, f)
+print(json.dumps(new, ensure_ascii=False))
+PYEOF
