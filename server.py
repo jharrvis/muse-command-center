@@ -154,6 +154,14 @@ def init_db():
             "ALTER TABLE inbox ADD COLUMN auto_execute INTEGER DEFAULT 0")
     if "approved_by" not in cols:
         conn.execute("ALTER TABLE inbox ADD COLUMN approved_by TEXT")
+    # Migrasi: external_id untuk sinkronisasi satu arah dari sumber luar
+    # (mis. kanban Hermes). Format: "<sumber>:<id-asli>", mis.
+    # "kanban:mci-team:t_abc123".
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(tasks)")]
+    if "external_id" not in cols:
+        conn.execute("ALTER TABLE tasks ADD COLUMN external_id TEXT")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_external "
+                 "ON tasks(external_id)")
     conn.commit()
     conn.close()
 
